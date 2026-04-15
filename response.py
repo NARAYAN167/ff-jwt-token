@@ -126,7 +126,7 @@ def process_token(uid, password):
                 return {
                     "region": response_dict.get("region", "N/A"),
                     "status": response_dict.get("status", "N/A"),
-                    "credit": "DrakLeafX",
+                    "credit": "@Narayanverma123",
                     "token": response_dict.get("token", "N/A"),
                     "token_access" : game_data.access_token,
                     "uid": uid,
