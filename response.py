@@ -38,7 +38,7 @@ def process_token(uid, password):
     game_data.timestamp = current_timestamp()
     game_data.game_name = "free fire"
     game_data.game_version = 1
-    game_data.version_code = "1.123.1"
+    game_data.version_code = "1.114.18"
     game_data.os_info = "Android OS 11 / API-30 (RKQ1.201112.002/eng.realme.20221110.193122)"
     game_data.device_type = "Handheld"
     game_data.network_provider = "JIO"
@@ -108,7 +108,7 @@ def process_token(uid, password):
         "Expect": "100-continue",
         "X-Unity-Version": "2018.4.11f1",
         "X-GA": "v1 1",
-        "ReleaseVersion": "OB54",
+        "ReleaseVersion": "OB50",
     }
     edata = bytes.fromhex(hex_encrypted_data)
     # print(edata)
@@ -126,7 +126,7 @@ def process_token(uid, password):
                 return {
                     "region": response_dict.get("region", "N/A"),
                     "status": response_dict.get("status", "N/A"),
-                    "credit": "@Narayanverma123",
+                    "credit": "DrakLeafX",
                     "token": response_dict.get("token", "N/A"),
                     "token_access" : game_data.access_token,
                     "uid": uid,
