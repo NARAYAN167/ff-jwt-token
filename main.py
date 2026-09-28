@@ -18,7 +18,7 @@ app = Flask(__name__)
 cache = Cache(app, config={"CACHE_TYPE": "SimpleCache"})  # In-memory cache
 
 # ---------- RETRY CONFIG ----------
-MAX_RETRIES = 5          # Kitni baar try karega
+MAX_RETRIES = 10          # Kitni baar try karega
 RETRY_DELAY = 2.0        # Har retry ke beech wait (seconds)
 # -----------------------------------
 
