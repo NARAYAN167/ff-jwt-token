@@ -1,17 +1,15 @@
 import requests
-import my_pb2
 import output_pb2
+import login_pb2
 from gen_token import encrypt_message, get_token
 from settings import AES_KEY, AES_IV
-import binascii
-from datetime import datetime, timezone
 from Crypto.Cipher import AES
 
 
 def parse_response(response_content):
+    """Parse text-format protobuf output into a dict."""
     response_dict = {}
-    lines = response_content.split("\n")
-    for line in lines:
+    for line in response_content.split("\n"):
         if ":" in line:
             key, value = line.split(":", 1)
             response_dict[key.strip()] = value.strip().strip('"')
@@ -32,17 +30,19 @@ def decrypt_response(key, iv, ciphertext):
 
 
 def find_protobuf_offset(data, max_scan=200):
-    """
-    Response এর সব offset scan করে valid protobuf খুঁজে বের করে।
-    """
+    """Scan response for a valid protobuf offset."""
     best = None
     for offset in range(0, min(len(data), max_scan)):
         try:
             msg = output_pb2.Lokesh()
             msg.ParseFromString(data[offset:])
-            # Validate: region is short alpha string (e.g. "BD", "ME")
             if 0 < len(msg.region) < 10 and msg.region.isalpha():
-                score = len(msg.region) + len(msg.place) + (1 if msg.token else 0) + (1 if msg.account_id else 0)
+                score = (
+                    len(msg.region)
+                    + len(msg.place)
+                    + (1 if msg.token else 0)
+                    + (1 if msg.account_id else 0)
+                )
                 if best is None or score > best[0]:
                     best = (score, offset, msg)
         except Exception:
@@ -52,85 +52,53 @@ def find_protobuf_offset(data, max_scan=200):
     return None, None
 
 
+def _post_login(url, payload, headers):
+    """POST the encrypted LoginReq. Returns (ok, response)."""
+    try:
+        response = requests.post(
+            url, data=payload, headers=headers, verify=False, timeout=15
+        )
+        return True, response
+    except requests.RequestException as e:
+        print(f"[DEBUG] Request exception: {e}")
+        return False, e
+
+
 def process_token(uid, password):
+    # ------------------------------------------------------------------
+    # STEP 1: OAuth guest token
+    # ------------------------------------------------------------------
     token_data = get_token(password, uid)
     if not token_data:
-        return {"uid": uid, "error": "Failed to retrieve token"}
+        return {"uid": uid, "error": "Failed to retrieve OAuth token"}
 
-    def current_timestamp(fmt="iso", tz=timezone.utc):
-        now = datetime.now(tz)
-        if fmt == "iso":
-            return now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        if fmt == "epoch":
-            return int(now.timestamp())
-        return now.strftime(fmt)
+    print(f"[DEBUG] token_data keys: {list(token_data.keys())}")
 
-    game_data = my_pb2.GameData()
-    game_data.timestamp = current_timestamp()
-    game_data.game_name = "free fire"
-    game_data.game_version = 1
-    game_data.version_code = "1.132.1"
-    game_data.os_info = "Android OS 11 / API-30 (RKQ1.201112.002/eng.realme.20221110.193122)"
-    game_data.device_type = "Handheld"
-    game_data.network_provider = "JIO"
-    game_data.connection_type = "MOBILE"
-    game_data.screen_width = 720
-    game_data.screen_height = 1600
-    game_data.dpi = "280"
-    game_data.cpu_info = "ARM Cortex-A73 | 2200 | 4"
-    game_data.total_ram = 4096
-    game_data.gpu_name = "Adreno (TM) 610"
-    game_data.gpu_version = "OpenGL ES 3.2"
-    game_data.user_id = "Google|c71ff1e2-457f-4e2d-83a1-c519fa3f2a44"
-    game_data.ip_address = "182.75.115.22"
-    game_data.language = "en"
-    open_id_value = token_data.get("open_id")
-    if not open_id_value:
-        open_id_value = f"Google|{uid}"
-    game_data.open_id = open_id_value
-    game_data.access_token = token_data.get("access_token", "")
-    game_data.platform_type = 4
-    game_data.device_form_factor = "Handheld"
-    game_data.device_model = "realme RMX1825"
-    game_data.field_60 = 30000
-    game_data.field_61 = 27500
-    game_data.field_62 = 1940
-    game_data.field_63 = 720
-    game_data.field_64 = 28000
-    game_data.field_65 = 30000
-    game_data.field_66 = 28000
-    game_data.field_67 = 30000
-    game_data.field_70 = 4
-    game_data.field_73 = 2
-    game_data.library_path = "/data/app/com.dts.freefireth-fpXCSphIV6dKC7jL-WOyRA==/lib/arm"
-    game_data.field_76 = 1
-    game_data.apk_info = "e62ab9354d8fb5fb081db338acb33491|/data/app/com.dts.freefireth-fpXCSphIV6dKC7jL-WOyRA==/base.apk"
-    game_data.field_78 = 6
-    game_data.field_79 = 1
-    game_data.os_architecture = "64"
-    game_data.build_number = "2024061806"
-    game_data.field_85 = 1
-    game_data.graphics_backend = "OpenGLES3"
-    game_data.max_texture_units = 16383
-    game_data.rendering_api = 4
-    game_data.encoded_field_89 = "\x10U\x15\x03\x02\t\rPYN\tEX\x03AZO9X\x07\rU\niZPVj\x05\rm\t\x04c"
-    game_data.field_92 = 8999
-    game_data.marketplace = "3rd_party"
-    game_data.encryption_key = "Jp2DT7F3Is55K/92LSJ4PWkJxZnMzSNn+HEBK2AFBDBdrLpWTA3bZjtbU3JbXigkIFFJ5ZJKi0fpnlJCPDD2A7h2aPQ="
-    game_data.total_storage = 64000
-    game_data.field_97 = 1
-    game_data.field_98 = 1
-    game_data.field_99 = "4"
-    game_data.field_100 = b"4"
+    open_id = token_data.get("open_id", "")
+    access_token = token_data.get("access_token", "")
 
-    serialized_data = game_data.SerializeToString()
-    encrypted_data = encrypt_message(AES_KEY, AES_IV, serialized_data)
-    hex_encrypted_data = binascii.hexlify(encrypted_data).decode("utf-8")
+    if not open_id or not access_token:
+        return {
+            "uid": uid,
+            "error": "OAuth response missing open_id or access_token",
+            "raw": token_data,
+        }
 
-    # ✅ NEW URL (already correct)
+    # ------------------------------------------------------------------
+    # STEP 2: Build LoginReq (this is what /MajorLogin expects)
+    # ------------------------------------------------------------------
+    login_req = login_pb2.LoginReq()
+    login_req.open_id = open_id
+    login_req.open_id_type = "4"           # 4 = guest
+    login_req.login_token = access_token
+    login_req.orign_platform_type = "4"
+
+    # ------------------------------------------------------------------
+    # STEP 3: POST with platform fallback
+    # ------------------------------------------------------------------
     url = "https://loginbp.ppmainecoonghj.com/MajorLogin"
 
-    headers = {
+    base_headers = {
         "User-Agent": "UnityPlayer/2018.4.12f1 (UnityWebRequest/1.0, libcurl/8.5.0-DEV)",
         "Accept": "*/*",
         "Accept-Encoding": "deflate, gzip",
@@ -142,78 +110,94 @@ def process_token(uid, password):
         "X-Unity-Version": "2018.4.12f1",
     }
 
-    edata = bytes.fromhex(hex_encrypted_data)
+    # Guest accounts use "4" as origin platform type
+    platform_candidates = ["4", "1", "2", "3", "5", "6", "7", "8", "9"]
 
-    try:
-        response = requests.post(
-            url, data=edata, headers=headers, verify=False, timeout=15,
-        )
+    last_response = None
 
-        if response.status_code != 200:
-            print(f"[DEBUG] HTTP {response.status_code} | {response.reason}")
+    for plat in platform_candidates:
+        login_req.orign_platform_type = plat
+        serialized = login_req.SerializeToString()
+        encrypted = encrypt_message(AES_KEY, AES_IV, serialized)
+        payload = bytes(encrypted)
+
+        print(f"[DEBUG] Trying orign_platform_type={plat!r} | "
+              f"payload={len(payload)} bytes")
+
+        ok, response = _post_login(url, payload, base_headers)
+        if not ok:
+            return {"uid": uid, "error": f"Request failed: {response}"}
+
+        last_response = response
+
+        if response.status_code == 200:
+            print(f"[DEBUG] [OK] Platform {plat!r} accepted")
+            break
+
+        body_snippet = response.content[:200]
+        print(f"[DEBUG] HTTP {response.status_code} | body={body_snippet!r}")
+
+        # If it's a platform error, keep trying. Otherwise stop.
+        if b"INVALID_PLATFORM" not in response.content:
             return {
                 "uid": uid,
-                "error": f"Failed to get response: HTTP {response.status_code}, {response.reason}",
+                "error": f"HTTP {response.status_code} {response.reason}",
+                "response_body": response.text[:512],
             }
+    else:
+        # Exhausted all candidates
+        return {
+            "uid": uid,
+            "error": "All platform candidates rejected",
+            "last_response": last_response.text[:512] if last_response else None,
+        }
 
-        raw = response.content
-        print(f"[DEBUG] Response length: {len(raw)} bytes")
+    # ------------------------------------------------------------------
+    # STEP 4: Parse success response
+    # ------------------------------------------------------------------
+    raw = last_response.content
+    print(f"[DEBUG] Response length: {len(raw)} bytes")
 
-        # ==========================================
-        # STRATEGY 1: Direct parse
-        # ==========================================
-        example_msg = output_pb2.Lokesh()
-        try:
-            example_msg.ParseFromString(raw)
-            if example_msg.region and len(example_msg.region) < 10:
-                print("[DEBUG] ✅ Direct parse worked")
-                response_dict = parse_response(str(example_msg))
-                return _build_result(uid, response_dict, game_data)
-        except Exception:
-            pass
+    # Strategy 1: direct parse
+    example_msg = output_pb2.Lokesh()
+    try:
+        example_msg.ParseFromString(raw)
+        if example_msg.region and len(example_msg.region) < 10:
+            print("[DEBUG] [OK] Direct parse worked")
+            return _build_result(uid, parse_response(str(example_msg)), access_token)
+    except Exception:
+        pass
 
-        # ==========================================
-        # STRATEGY 2: Find protobuf offset (main fix)
-        # ==========================================
-        print("[DEBUG] Scanning for protobuf offset...")
-        offset, msg = find_protobuf_offset(raw)
+    # Strategy 2: offset scan
+    print("[DEBUG] Scanning for protobuf offset...")
+    offset, msg = find_protobuf_offset(raw)
+    if offset is not None:
+        print(f"[DEBUG] [OK] Found protobuf at offset {offset}")
+        print(f"[DEBUG]   region={msg.region}, place={msg.place}")
+        return _build_result(uid, parse_response(str(msg)), access_token)
+
+    # Strategy 3: AES decrypt then parse
+    print("[DEBUG] Trying AES decrypt...")
+    decrypted = decrypt_response(AES_KEY, AES_IV, raw)
+    if decrypted:
+        offset, msg = find_protobuf_offset(decrypted)
         if offset is not None:
-            print(f"[DEBUG] ✅ Found protobuf at offset {offset}")
-            print(f"[DEBUG]   region={msg.region}, place={msg.place}")
-            response_dict = parse_response(str(msg))
-            return _build_result(uid, response_dict, game_data)
+            print(f"[DEBUG] [OK] Decrypt + offset {offset} worked")
+            return _build_result(uid, parse_response(str(msg)), access_token)
 
-        # ==========================================
-        # STRATEGY 3: AES decrypt
-        # ==========================================
-        print("[DEBUG] Trying AES decrypt...")
-        decrypted = decrypt_response(AES_KEY, AES_IV, raw)
-        if decrypted:
-            offset, msg = find_protobuf_offset(decrypted)
-            if offset is not None:
-                print(f"[DEBUG] ✅ Decrypt + offset {offset} worked")
-                response_dict = parse_response(str(msg))
-                return _build_result(uid, response_dict, game_data)
-
-        return {
-            "uid": uid,
-            "error": "Failed to deserialize the response",
-            "raw_hex": raw.hex(),
-        }
-
-    except requests.RequestException as e:
-        return {
-            "uid": uid,
-            "error": f"An error occurred while making the request: {e}",
-        }
+    return {
+        "uid": uid,
+        "error": "Failed to deserialize the response",
+        "raw_hex": raw.hex()[:512],
+    }
 
 
-def _build_result(uid, response_dict, game_data):
+def _build_result(uid, response_dict, access_token):
     return {
         "region": response_dict.get("region", "N/A"),
         "status": response_dict.get("status", "N/A"),
-        "credit": "@Narayanverma123",
+        "developer": "@Narayanverma123",
         "token": response_dict.get("token", "N/A"),
-        "token_access": game_data.access_token,
+        "token_access": access_token,
         "uid": uid,
     }

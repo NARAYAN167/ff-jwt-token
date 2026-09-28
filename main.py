@@ -15,14 +15,11 @@ init(autoreset=True)
 # Initialize Flask app
 app = Flask(__name__)
 
-# ✅ FIXED: "simple" -> "SimpleCache" (naye Flask-Caching ke liye)
 cache = Cache(app, config={"CACHE_TYPE": "SimpleCache"})  # In-memory cache
-
 
 @app.route("/")
 def home():
     return "Jwt Token Generator API is running!"
-
 
 @app.route("/token", methods=["GET"])
 def get_responses():

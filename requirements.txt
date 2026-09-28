@@ -1,7 +1,7 @@
-Flask==2.3.2
-Flask-Caching==2.0.2
-requests==2.31.0
-pycryptodome==3.19.0
-colorama==0.4.6
-protobuf==4.24.4
-PyJWT==2.8.0
+Flask>=3.0.0
+Flask-Caching>=2.5.0
+requests>=2.31.0
+pycryptodome>=3.19.0
+colorama>=0.4.6
+protobuf>=5.28.0
+PyJWT>=2.8.0
