@@ -17,7 +17,7 @@ app = Flask(__name__)
 cache = Cache(app, config={"CACHE_TYPE": "SimpleCache"})
 
 # ---------- RETRY CONFIG (VERCEL — 10s timeout) ----------
-MAX_RETRIES = 2          # Vercel pe max 2 attempts hi ho sakte hain
+MAX_RETRIES = 5          # Vercel pe max 2 attempts hi ho sakte hain
 RETRY_DELAY = 1.0        # 1 second wait
 # ---------------------------------------------------------
 
